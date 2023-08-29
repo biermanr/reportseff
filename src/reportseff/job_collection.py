@@ -4,7 +4,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from .job import Job
-from .output_renderer import OutputRenderer
+from .table_renderer import TableRenderer
 
 
 class JobCollection:
@@ -33,7 +33,7 @@ class JobCollection:
         self.job_regex = re.compile(r"^(?P<jobid>(?P<job>[0-9]+)(_[][\-0-9]+)?)$")
 
         self.jobs: Dict[str, Job] = {}
-        self.renderer: Optional[OutputRenderer] = None
+        self.renderer: Optional[TableRenderer] = None
         self.dir_name = ""
         self.partition_timelimits: dict = {}
 

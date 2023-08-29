@@ -24,6 +24,8 @@ class ReportseffParameters:
     user: str = ""
     partition: str = ""
     extra_args: str = ""
+    summary: bool = False
+    summary_only: bool = False
 
     def __init__(
         self,
@@ -43,6 +45,7 @@ class ReportseffParameters:
         user: str = "",
         partition: str = "",
         extra_args: str = "",
+        summary_only: bool = False,
     ) -> None:
         """Create a new parameter object.
 
@@ -63,6 +66,7 @@ class ReportseffParameters:
             user: the user to report for
             partition: the partition to report for
             extra_args: extra arguments to forward to sacct
+            summary_only: if summary output should be shown instead of table output
         """
         self.color = color
         self.debug = debug
@@ -80,6 +84,7 @@ class ReportseffParameters:
         self.user = user
         self.partition = partition
         self.extra_args = extra_args
+        self.summary_only = summary_only
 
         if self.format_str.startswith("+"):
             self.format_str = (

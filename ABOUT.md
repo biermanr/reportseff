@@ -10,7 +10,7 @@ but for only a single job at a time. `sacct` handles multiple jobs, but couldn't
 give the efficiency. With the current python implementation,
 all job information is obtained from a single
 `sacct` call and with click the output is colored to quickly see how things are
-running. (But color isn't displayed below due to markdown limitations).
+running with optional ascii graphics. (But color isn't displayed below due to markdown limitations).
 
 ## Be good to your scheduler
 

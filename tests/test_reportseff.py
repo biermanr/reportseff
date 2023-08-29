@@ -8,7 +8,7 @@ import pytest
 from reportseff import console
 from reportseff.db_inquirer import SacctInquirer
 from reportseff.job_collection import JobCollection
-from reportseff.output_renderer import OutputRenderer
+from reportseff.table_renderer import TableRenderer
 
 
 @pytest.fixture
@@ -170,7 +170,7 @@ def test_short_output(mocker, mock_inquirer):
     )
     mocker.patch("reportseff.db_inquirer.subprocess.run", return_value=sub_result)
     mocker.patch("reportseff.console.len", return_value=20)
-    mocker.patch.object(OutputRenderer, "format_jobs", return_value="output")
+    mocker.patch.object(TableRenderer, "format_jobs", return_value="output")
 
     mock_click = mocker.patch("reportseff.console.click.echo")
     result = runner.invoke(console.main, " 23000233".split())
@@ -191,7 +191,7 @@ def test_long_output(mocker, mock_inquirer):
     )
     mocker.patch("reportseff.db_inquirer.subprocess.run", return_value=sub_result)
     mocker.patch("reportseff.console.len", return_value=21)
-    mocker.patch.object(OutputRenderer, "format_jobs", return_value="output")
+    mocker.patch.object(TableRenderer, "format_jobs", return_value="output")
     mock_click = mocker.patch("reportseff.console.click.echo_via_pager")
     result = runner.invoke(console.main, " 23000233".split())
 
@@ -1039,3 +1039,32 @@ def test_extra_args(mocker, mock_inquirer):
     )
 
     assert result.exit_code == 0
+
+
+def test_summary_only(mocker, mock_inquirer):
+    """Test summary only."""
+    mocker.patch("reportseff.console.which", return_value=True)
+    runner = CliRunner()
+    sub_result = mocker.MagicMock()
+    sub_result.returncode = 0
+    sub_result.stdout = (
+        "^|^1^|^01:27:42^|^24418435^|^24418435^|^^|^1^|^1Gn^|^"
+        "COMPLETED^|^03:00:00^|^01:27:29\n"
+        "^|^1^|^01:27:42^|^24418435.batch^|^24418435.batch^|^499092K^|^1^|^1Gn^|^"
+        "COMPLETED^|^^|^01:27:29\n"
+        "^|^1^|^01:27:42^|^24418435.extern^|^24418435.extern^|^1376K^|^1^|^1Gn^|^"
+        "COMPLETED^|^^|^00:00:00\n"
+    )
+    mocker.patch("reportseff.db_inquirer.subprocess.run", return_value=sub_result)
+
+    def set_jobs(self, directory):
+        self.set_jobs(("24418435",))
+
+    mocker.patch.object(JobCollection, "set_out_dir", new=set_jobs)
+    result = runner.invoke(
+        console.main,
+        ["--summary-only"],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == "There were 1 jobs\n"

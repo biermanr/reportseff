@@ -1,11 +1,11 @@
-"""Test operation of output renderer object."""
+"""Test operation of output table renderer object."""
 import re
 
 import click
 import pytest
 
 from reportseff import job as job_module
-from reportseff import output_renderer
+from reportseff import table_renderer
 
 
 min_required = (
@@ -17,7 +17,7 @@ min_required = (
 @pytest.fixture
 def renderer():
     """Default renderer with valid names for only default string."""
-    return output_renderer.OutputRenderer(min_required)
+    return table_renderer.TableRenderer(min_required)
 
 
 @pytest.fixture
@@ -120,6 +120,22 @@ def some_jobs():
         }
     )
     jobs.append(job)
+    job = job_module.Job("24371661", "24371661", None)
+    job.update(
+        {
+            "JobID": "24371661",
+            "State": "COMPLETED",
+            "AllocCPUS": "1",
+            "REQMEM": "2Gn",
+            "TotalCPU": "00:08:00",
+            "Elapsed": "00:10:05",
+            "Timelimit": "00:30:00",
+            "MaxRSS": "1Gn",
+            "NNodes": "1",
+            "NTasks": "",
+        }
+    )
+    jobs.append(job)
     return jobs
 
 
@@ -166,11 +182,11 @@ def some_multi_core_jobs(
 def test_renderer_init(renderer):
     """Initialized renderer produces correct columns."""
     assert renderer.formatters == [
-        output_renderer.ColumnFormatter("JobID%>"),
-        output_renderer.ColumnFormatter("State"),
-        output_renderer.ColumnFormatter("Elapsed%>"),
-        output_renderer.ColumnFormatter("CPUEff"),
-        output_renderer.ColumnFormatter("MemEff"),
+        table_renderer.ColumnFormatter("JobID%>"),
+        table_renderer.ColumnFormatter("State"),
+        table_renderer.ColumnFormatter("Elapsed%>"),
+        table_renderer.ColumnFormatter("CPUEff"),
+        table_renderer.ColumnFormatter("MemEff"),
     ]
     assert sorted(renderer.query_columns) == sorted(
         (
@@ -179,14 +195,14 @@ def test_renderer_init(renderer):
         ).split()
     )
 
-    renderer = output_renderer.OutputRenderer(min_required, "")
+    renderer = table_renderer.TableRenderer(min_required, "")
     assert renderer.formatters == []
     assert sorted(renderer.query_columns) == sorted(
         ("JobID JobIDRaw State AdminComment").split()
     )
 
-    renderer = output_renderer.OutputRenderer(min_required, "TotalCPU%<5")
-    assert renderer.formatters == [output_renderer.ColumnFormatter("TotalCPU%<5")]
+    renderer = table_renderer.TableRenderer(min_required, "TotalCPU%<5")
+    assert renderer.formatters == [table_renderer.ColumnFormatter("TotalCPU%<5")]
     assert sorted(renderer.query_columns) == sorted(
         ("JobID JobIDRaw State TotalCPU AdminComment").split()
     )
@@ -194,29 +210,29 @@ def test_renderer_init(renderer):
 
 def test_renderer_build_formatters():
     """Can parse formatters from format string."""
-    assert output_renderer.build_formatters("Name,Name%>,Name%10,Name%<10") == [
-        output_renderer.ColumnFormatter("Name"),
-        output_renderer.ColumnFormatter("Name%>"),
-        output_renderer.ColumnFormatter("Name%10"),
-        output_renderer.ColumnFormatter("Name%<10"),
+    assert table_renderer.build_formatters("Name,Name%>,Name%10,Name%<10") == [
+        table_renderer.ColumnFormatter("Name"),
+        table_renderer.ColumnFormatter("Name%>"),
+        table_renderer.ColumnFormatter("Name%10"),
+        table_renderer.ColumnFormatter("Name%<10"),
     ]
 
-    assert output_renderer.build_formatters("jobid,state,elapsed") == [
+    assert table_renderer.build_formatters("jobid,state,elapsed") == [
         "jobid",
         "state",
         "elapsed",
     ]
 
-    assert output_renderer.build_formatters("") == []
+    assert table_renderer.build_formatters("") == []
 
 
 def test_renderer_validate_formatters(renderer):
     """Can validate formatters as members of a provided collection, normalizing name."""
-    renderer.formatters = output_renderer.build_formatters("JobID,JOBid,jObId")
+    renderer.formatters = table_renderer.build_formatters("JobID,JOBid,jObId")
     assert renderer.validate_formatters(["JobID"]) == "JobID JobID JobID".split()
     assert renderer.formatters == "JobID JobID JobID".split()
 
-    renderer.formatters = output_renderer.build_formatters("JobID,GPU%>10")
+    renderer.formatters = table_renderer.build_formatters("JobID,GPU%>10")
     assert (
         renderer.validate_formatters(["JobID", "GPU", "GPUEff", "GPUMem"])
         == "JobID GPU".split()
@@ -235,21 +251,21 @@ def test_renderer_validate_formatters_with_node(renderer):
     # normal function
     renderer.node = False
     renderer.gpu = False
-    renderer.formatters = output_renderer.build_formatters("State")
+    renderer.formatters = table_renderer.build_formatters("State")
     assert renderer.validate_formatters(min_gpu) == ["State"]
     assert renderer.formatters == ["State"]
 
     # add in job id
     renderer.node = True
     renderer.gpu = False
-    renderer.formatters = output_renderer.build_formatters("State")
+    renderer.formatters = table_renderer.build_formatters("State")
     assert renderer.validate_formatters(min_gpu) == ["State"]
     assert renderer.formatters == ["JobID", "State"]
 
     # add in both gpus, gpu implies node
     renderer.node = True
     renderer.gpu = True
-    renderer.formatters = output_renderer.build_formatters("State")
+    renderer.formatters = table_renderer.build_formatters("State")
     assert renderer.validate_formatters(min_gpu) == ["State"]
     assert renderer.formatters == ["JobID", "State", "GPUEff", "GPUMem"]
     assert renderer.formatters[0].alignment == "<"  # switched by node reporting
@@ -257,7 +273,7 @@ def test_renderer_validate_formatters_with_node(renderer):
     # since format already has jobid and gpumem, will not override
     renderer.node = True
     renderer.gpu = True
-    renderer.formatters = output_renderer.build_formatters("GPUMEM,State,JobID:>")
+    renderer.formatters = table_renderer.build_formatters("GPUMEM,State,JobID:>")
     assert renderer.validate_formatters(min_gpu) == "GPUMem State JobID".split()
     assert renderer.formatters == ["GPUMem", "State", "JobID"]
     assert renderer.formatters[2].alignment == "<"  # switched by node reporting
@@ -290,7 +306,7 @@ def test_renderer_correct_columns(renderer):
 
 def test_renderer_format_jobs(some_jobs):
     """Can render output as table with colored entries."""
-    renderer = output_renderer.OutputRenderer(
+    renderer = table_renderer.TableRenderer(
         min_required, "JobID,State,Elapsed,CPUEff,REQMEM,TimeEff"
     )
     result = renderer.format_jobs(some_jobs)
@@ -321,11 +337,12 @@ def test_renderer_format_jobs(some_jobs):
     assert lines[4].split() == "24371658 CANCELLED 00:00:00 --- 1Gn 0.0%".split()
     assert lines[5].split() == "24371659 TIMEOUT 00:21:00 19.0% 2Gn 105.0%".split()
     assert lines[6].split() == "24371660 OTHER 00:12:05 74.5% 2Gn 60.4%".split()
+    assert lines[7].split() == "24371661 COMPLETED 00:10:05 79.3% 2Gn 33.6%".split()
 
 
 def test_renderer_format_jobs_multi_node(some_multi_core_jobs):
     """Can render output as table with colored entries."""
-    renderer = output_renderer.OutputRenderer(
+    renderer = table_renderer.TableRenderer(
         min_required,
         "JobID,State,CPUEff,TimeEff,MemEff,GPU",
     )
@@ -346,7 +363,7 @@ def test_renderer_format_jobs_multi_node(some_multi_core_jobs):
 
 def test_renderer_format_jobs_multi_node_with_nodes(some_multi_core_jobs):
     """Can render output as table with colored entries."""
-    renderer = output_renderer.OutputRenderer(
+    renderer = table_renderer.TableRenderer(
         min_required,
         "JobID,State,CPUEff,TimeEff,MemEff,GPU",
         node=True,
@@ -374,7 +391,7 @@ def test_renderer_format_jobs_multi_node_with_nodes(some_multi_core_jobs):
 
 def test_renderer_format_jobs_multi_node_with_nodes_and_gpu(some_multi_core_jobs):
     """Can render output as table with colored entries."""
-    renderer = output_renderer.OutputRenderer(
+    renderer = table_renderer.TableRenderer(
         min_required, "JobID,State,CPUEff,TimeEff,MemEff,GPU", node=True, gpu=True
     )
     result = renderer.format_jobs(some_multi_core_jobs)
@@ -415,14 +432,14 @@ def test_renderer_format_jobs_multi_node_with_nodes_and_gpu(some_multi_core_jobs
 
 def test_format_jobs_empty(some_jobs):
     """Empty format string produces empty outputs."""
-    renderer = output_renderer.OutputRenderer(min_required, "")
+    renderer = table_renderer.TableRenderer(min_required, "")
     result = renderer.format_jobs(some_jobs)
     assert result == ""
 
 
 def test_format_jobs_single_str(some_jobs):
     """A single format string left aligns and suppresses title for piping."""
-    renderer = output_renderer.OutputRenderer(min_required, "JobID%>")
+    renderer = table_renderer.TableRenderer(min_required, "JobID%>")
     assert len(renderer.formatters) == 1
     assert renderer.formatters[0].alignment == ">"
 
@@ -437,31 +454,32 @@ def test_format_jobs_single_str(some_jobs):
         "24371658",
         "24371659",
         "24371660",
+        "24371661",
     ]
 
 
 def test_formatter_init():
     """Column formatter parses format tokens correctly."""
     # simple name
-    result = output_renderer.ColumnFormatter("test")
+    result = table_renderer.ColumnFormatter("test")
     assert result.title == "test"
     assert result.alignment == "^"
     assert result.width is None
 
     # with alignment
-    result = output_renderer.ColumnFormatter("test%>")
+    result = table_renderer.ColumnFormatter("test%>")
     assert result.title == "test"
     assert result.alignment == ">"
     assert result.width is None
 
     # with width
-    result = output_renderer.ColumnFormatter("test%10")
+    result = table_renderer.ColumnFormatter("test%10")
     assert result.title == "test"
     assert result.alignment == "^"
     assert result.width == 10
 
     # with both
-    result = output_renderer.ColumnFormatter("test%<10")
+    result = table_renderer.ColumnFormatter("test%<10")
     assert result.title == "test"
     assert result.alignment == "<"
     assert result.width == 10
@@ -469,41 +487,41 @@ def test_formatter_init():
 
     # with invalid width
     with pytest.raises(ValueError) as exception:
-        result = output_renderer.ColumnFormatter("test%1<0")
+        result = table_renderer.ColumnFormatter("test%1<0")
     assert "Unable to parse format token 'test%1<0'" in str(exception)
 
     # empty
     with pytest.raises(ValueError) as exception:
-        result = output_renderer.ColumnFormatter("")
+        result = table_renderer.ColumnFormatter("")
     assert "Unable to parse format token ''" in str(exception)
 
     # if unable to parse with %, recommend using ""
     with pytest.raises(ValueError) as exception:
-        result = output_renderer.ColumnFormatter("test%a")
+        result = table_renderer.ColumnFormatter("test%a")
     assert (
         "Unable to parse format token 'test%a', " "did you forget to wrap in quotes?"
     ) in str(exception)
 
     # if unable to parse with %, recommend using "" even when matching
     with pytest.raises(ValueError) as exception:
-        result = output_renderer.ColumnFormatter("test%")
+        result = table_renderer.ColumnFormatter("test%")
     assert (
         "Unable to parse format token 'test%', " "did you forget to wrap in quotes?"
     ) in str(exception)
 
     # end without width is an error
     with pytest.raises(ValueError) as exception:
-        result = output_renderer.ColumnFormatter("test%e")
+        result = table_renderer.ColumnFormatter("test%e")
 
     # can specify end with width
-    result = output_renderer.ColumnFormatter("test%20e")
+    result = table_renderer.ColumnFormatter("test%20e")
     assert result.title == "test"
     assert result.alignment == "^"
     assert result.width == 20
     assert result.end is not None
 
     # can use alternate tokens : and $
-    result = output_renderer.ColumnFormatter("test:20$")
+    result = table_renderer.ColumnFormatter("test:20$")
     assert result.title == "test"
     assert result.alignment == "^"
     assert result.width == 20
@@ -512,9 +530,9 @@ def test_formatter_init():
 
 def test_formatter_eq():
     """Can test for equality and with a string."""
-    fmt = output_renderer.ColumnFormatter("Name")
-    fmt2 = output_renderer.ColumnFormatter("Name")
-    fmt3 = output_renderer.ColumnFormatter("Name>")
+    fmt = table_renderer.ColumnFormatter("Name")
+    fmt2 = table_renderer.ColumnFormatter("Name")
+    fmt3 = table_renderer.ColumnFormatter("Name>")
     assert fmt == fmt2
     assert fmt != fmt3
 
@@ -532,7 +550,7 @@ def test_formatter_eq():
 
 def test_formatter_validate_title():
     """Can validate titles against a column formatter."""
-    fmt = output_renderer.ColumnFormatter("NaMe")
+    fmt = table_renderer.ColumnFormatter("NaMe")
 
     with pytest.raises(ValueError) as exception:
         fmt.validate_title(["JobID", "State"])
@@ -545,7 +563,7 @@ def test_formatter_validate_title():
 
 def test_formatter_compute_width():
     """Can determine width of table entries."""
-    fmt = output_renderer.ColumnFormatter("JobID")
+    fmt = table_renderer.ColumnFormatter("JobID")
     # matches title
     jobs = [
         job_module.Job("job", "tes", None),
@@ -563,14 +581,14 @@ def test_formatter_compute_width():
     fmt.compute_width(jobs)
     assert fmt.width == 7
 
-    fmt = output_renderer.ColumnFormatter("JobID")
+    fmt = table_renderer.ColumnFormatter("JobID")
     fmt.compute_width(jobs)
     assert fmt.width == 12
 
 
 def test_formatter_format_entry():
     """Can format entry with alignment, width, and color."""
-    fmt = output_renderer.ColumnFormatter("Name")
+    fmt = table_renderer.ColumnFormatter("Name")
     # no width causes just the name to be printed
     assert fmt.format_title() == click.style("Name", bold=True)
 

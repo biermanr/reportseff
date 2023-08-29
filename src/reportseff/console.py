@@ -10,6 +10,8 @@ from .db_inquirer import BaseInquirer, SacctInquirer
 from .job_collection import JobCollection
 from .output_renderer import OutputRenderer
 from .parameters import ReportseffParameters
+from .summary_renderer import SummaryRenderer
+from .table_renderer import TableRenderer
 
 
 @click.command()
@@ -116,10 +118,20 @@ from .parameters import ReportseffParameters
     default=False,
     help="Output will be '|' delmited without a '|' at the end.",
 )
+@click.option(
+    "--summary-only",
+    is_flag=True,
+    default=False,
+    help="Only output summary rather than tabular information.",
+)
 @click.version_option(version=__version__)
 @click.argument("jobs", nargs=-1)
 def main(**kwargs: Any) -> None:
     """Main entry point for reportseff."""
+    if which("sacct") is None:
+        click.secho("No supported scheduling systems found!", fg="red", err=True)
+        sys.exit(1)
+
     args = ReportseffParameters(**kwargs)
 
     output, entries = get_jobs(args)
@@ -145,9 +157,12 @@ def get_jobs(args: ReportseffParameters) -> Tuple[str, int]:
     if args.slurm_format:
         job_collection.set_custom_seff_format(args.slurm_format)
 
-    inquirer, renderer = get_implementation(
-        args.format_str, args.node, args.node_and_gpu, args.parsable
-    )
+    if args.summary_only:
+        inquirer, renderer = get_summary_implementation()
+    else:
+        inquirer, renderer = get_table_implementation(
+            args.format_str, args.node, args.node_and_gpu, args.parsable
+        )
 
     inquirer.set_state(args.state)
     inquirer.set_not_state(args.not_state)
@@ -190,13 +205,13 @@ def get_jobs(args: ReportseffParameters) -> Tuple[str, int]:
     return renderer.format_jobs(found_jobs), len(found_jobs)
 
 
-def get_implementation(
+def get_table_implementation(
     format_str: str,
     node: bool = False,
     node_and_gpu: bool = False,
     parsable: bool = False,
 ) -> Tuple[BaseInquirer, OutputRenderer]:
-    """Get system-specific objects.
+    """Get system-specific objects for table renderer.
 
     Args:
         format_str: the formatting options specified by user
@@ -205,18 +220,27 @@ def get_implementation(
         A db_inqurirer
         An output renderer
     """
-    if which("sacct") is not None:
-        inquirer = SacctInquirer()
-        renderer = OutputRenderer(
-            inquirer.get_valid_formats(),
-            format_str,
-            node=node or node_and_gpu,
-            gpu=node_and_gpu,
-            parsable=parsable,
-        )
-    else:
-        click.secho("No supported scheduling systems found!", fg="red", err=True)
-        sys.exit(1)
+    inquirer = SacctInquirer()
+    renderer = TableRenderer(
+        inquirer.get_valid_formats(),
+        format_str,
+        node=node or node_and_gpu,
+        gpu=node_and_gpu,
+        parsable=parsable,
+    )
+
+    return inquirer, renderer
+
+
+def get_summary_implementation() -> Tuple[BaseInquirer, OutputRenderer]:
+    """Get system-specific objects for summary renderer.
+
+    Returns:
+        A db_inqurirer
+        An output renderer
+    """
+    inquirer = SacctInquirer()
+    renderer = SummaryRenderer()
 
     return inquirer, renderer
 
