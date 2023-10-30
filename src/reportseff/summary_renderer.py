@@ -1,4 +1,5 @@
 """Module for rendering summary output."""
+import collections
 from typing import List
 
 from .job import Job
@@ -33,4 +34,14 @@ class SummaryRenderer(OutputRenderer):
         Returns:
             Formatted summary as single string
         """
-        return f"There were {len(jobs)} jobs"
+        total_jobs = f"Summary information for {len(jobs)} job(s)"
+
+        state_counter = collections.Counter(j.state for j in jobs)
+        job_states_header = "Number of jobs in each state:"
+        job_states_table = "\n".join(
+            f"- {s}: {n} job(s)" for s, n in state_counter.items()
+        )
+        job_states = job_states_header + "\n" + job_states_table
+
+        summary = "\n\n".join((total_jobs, job_states))
+        return summary

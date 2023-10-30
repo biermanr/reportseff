@@ -1067,4 +1067,8 @@ def test_summary_only(mocker, mock_inquirer):
     )
 
     assert result.exit_code == 0
-    assert result.output == "There were 1 jobs\n"
+    assert result.output == (
+        "Summary information for 1 job(s)\n\n"
+        "Number of jobs in each state:\n"
+        "- COMPLETED: 1 job(s)\n"
+    )
